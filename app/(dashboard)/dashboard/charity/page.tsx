@@ -14,8 +14,10 @@ type Charity = {
 
 export default function CharityPage() {
   const [charities, setCharities] = useState<Charity[]>([])
+  const [filtered, setFiltered] = useState<Charity[]>([])
+  const [search, setSearch] = useState('')
+  const [filterFeatured, setFilterFeatured] = useState(false)
   const [selectedCharity, setSelectedCharity] = useState<string | null>(null)
-  const [currentCharity, setCurrentCharity] = useState<string | null>(null)
   const [percentage, setPercentage] = useState(10)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
@@ -34,7 +36,6 @@ export default function CharityPage() {
         .single()
 
       if (profile) {
-        setCurrentCharity(profile.charity_id)
         setSelectedCharity(profile.charity_id)
         setPercentage(profile.charity_percentage || 10)
       }
@@ -45,11 +46,28 @@ export default function CharityPage() {
         .eq('is_active', true)
         .order('is_featured', { ascending: false })
 
-      if (charitiesData) setCharities(charitiesData)
+      if (charitiesData) {
+        setCharities(charitiesData)
+        setFiltered(charitiesData)
+      }
     }
 
     fetchData()
   }, [])
+
+  useEffect(() => {
+    let results = charities
+    if (search) {
+      results = results.filter(c =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.description?.toLowerCase().includes(search.toLowerCase())
+      )
+    }
+    if (filterFeatured) {
+      results = results.filter(c => c.is_featured)
+    }
+    setFiltered(results)
+  }, [search, filterFeatured, charities])
 
   const handleSave = async () => {
     setLoading(true)
@@ -66,7 +84,6 @@ export default function CharityPage() {
       })
       .eq('id', user.id)
 
-    setCurrentCharity(selectedCharity)
     setSuccess('Charity preferences saved!')
     setLoading(false)
   }
@@ -81,36 +98,64 @@ export default function CharityPage() {
       {/* Contribution slider */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <h2 className="text-lg font-bold text-white mb-4">Your Contribution</h2>
-        <div className="flex items-center gap-6">
-          <div className="flex-1">
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-400 text-sm">Charity contribution</span>
-              <span className="text-green-400 font-bold text-lg">{percentage}%</span>
-            </div>
-            <input
-              type="range"
-              min={10}
-              max={100}
-              step={5}
-              value={percentage}
-              onChange={(e) => setPercentage(parseInt(e.target.value))}
-              className="w-full accent-green-500"
-            />
-            <div className="flex justify-between mt-1">
-              <span className="text-gray-500 text-xs">Min 10%</span>
-              <span className="text-gray-500 text-xs">Max 100%</span>
-            </div>
+        <div className="flex-1">
+          <div className="flex justify-between mb-2">
+            <span className="text-gray-400 text-sm">Charity contribution</span>
+            <span className="text-green-400 font-bold text-lg">{percentage}%</span>
+          </div>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            step={5}
+            value={percentage}
+            onChange={(e) => setPercentage(parseInt(e.target.value))}
+            className="w-full accent-green-500"
+          />
+          <div className="flex justify-between mt-1">
+            <span className="text-gray-500 text-xs">Min 10%</span>
+            <span className="text-gray-500 text-xs">Max 100%</span>
           </div>
         </div>
       </div>
 
-      {/* Charity list */}
+      {/* Search & filter */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <h2 className="text-lg font-bold text-white mb-4">Select a Charity</h2>
 
-        {charities.length > 0 ? (
+        <div className="flex gap-3 mb-6 flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search charities..."
+            className="flex-1 min-w-[200px] bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors text-sm"
+          />
+          <button
+            onClick={() => setFilterFeatured(!filterFeatured)}
+            className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              filterFeatured
+                ? 'bg-green-500 text-black'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            ⭐ Featured only
+          </button>
+          {(search || filterFeatured) && (
+            <button
+              onClick={() => { setSearch(''); setFilterFeatured(false) }}
+              className="px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-800 text-gray-400 hover:bg-gray-700 transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        <p className="text-gray-500 text-xs mb-4">{filtered.length} of {charities.length} charities shown</p>
+
+        {filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {charities.map((charity) => (
+            {filtered.map((charity) => (
               <div
                 key={charity.id}
                 onClick={() => setSelectedCharity(charity.id)}
@@ -122,10 +167,15 @@ export default function CharityPage() {
               >
                 {charity.is_featured && (
                   <span className="absolute top-3 right-3 bg-green-500 text-black text-xs font-bold px-2 py-0.5 rounded-full">
-                    Featured
+                    ⭐ Featured
                   </span>
                 )}
-                <h3 className="text-white font-bold text-lg">{charity.name}</h3>
+                {selectedCharity === charity.id && (
+                  <div className="absolute top-3 left-3 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-black text-xs">✓</span>
+                  </div>
+                )}
+                <h3 className="text-white font-bold text-lg mt-1">{charity.name}</h3>
                 <p className="text-gray-400 text-sm mt-1 line-clamp-2">{charity.description}</p>
                 {charity.website_url && (
                   <a
@@ -138,18 +188,19 @@ export default function CharityPage() {
                     Visit website →
                   </a>
                 )}
-                {selectedCharity === charity.id && (
-                  <div className="absolute top-3 left-3 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-black text-xs">✓</span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-4xl mb-3">🤝</p>
-            <p className="text-gray-400">No charities listed yet — check back soon!</p>
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="text-gray-400">No charities found matching your search</p>
+            <button
+              onClick={() => { setSearch(''); setFilterFeatured(false) }}
+              className="text-green-400 hover:text-green-300 text-sm mt-2 inline-block"
+            >
+              Clear filters
+            </button>
           </div>
         )}
       </div>

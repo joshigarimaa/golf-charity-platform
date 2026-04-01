@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type DrawResult = {
   winning_numbers: number[]
   total_pool: number
   jackpot_amount: number
+  rolled_over_jackpot: number
   entries: { user_id: string; scores: number[]; match_count: number }[]
 }
 
@@ -16,15 +17,36 @@ export default function AdminDrawsPage() {
   const [loading, setLoading] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [message, setMessage] = useState('')
+  const [previousJackpot, setPreviousJackpot] = useState(0)
+  const [pastDraws, setPastDraws] = useState<any[]>([])
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      // Get past draws
+      const { data: draws } = await supabase
+        .from('draws')
+        .select('*')
+        .order('draw_date', { ascending: false })
+        .limit(5)
+
+      if (draws) setPastDraws(draws)
+
+      // Check for rolled over jackpot from last draw
+      const lastDraw = draws?.[0]
+      if (lastDraw?.jackpot_rolled_over) {
+        setPreviousJackpot(Number(lastDraw.jackpot_amount))
+      }
+    }
+    fetchData()
+  }, [])
 
   const runSimulation = async () => {
     setLoading(true)
     setMessage('')
     setSimResult(null)
 
-    // Fetch all active subscribers and their scores
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id')
@@ -40,21 +62,18 @@ export default function AdminDrawsPage() {
       return
     }
 
-    // Build per-user score arrays
     const userScores: Record<string, number[]> = {}
     scores?.forEach(({ user_id, score }) => {
       if (!userScores[user_id]) userScores[user_id] = []
       userScores[user_id].push(score)
     })
 
-    // Generate winning numbers
     let winningNumbers: number[] = []
     if (drawMode === 'random') {
       const nums = new Set<number>()
       while (nums.size < 5) nums.add(Math.floor(Math.random() * 45) + 1)
       winningNumbers = Array.from(nums)
     } else {
-      // Weighted: favour most frequently submitted scores
       const freq: Record<number, number> = {}
       scores?.forEach(({ score }) => { freq[score] = (freq[score] || 0) + 1 })
       const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1])
@@ -66,18 +85,25 @@ export default function AdminDrawsPage() {
       winningNumbers = Array.from(nums)
     }
 
-    // Calculate prize pool (£10 per active subscriber, 40/35/25 split)
-    const totalPool = profiles.length * 10
-    const jackpotAmount = totalPool * 0.4
+    const basePool = profiles.length * 10
+    const currentJackpot = (basePool * 0.4) + previousJackpot
+    const totalPool = basePool
 
-    // Score each entry
     const entries = profiles.map((p) => {
       const userScoreList = userScores[p.id] || []
       const matchCount = userScoreList.filter((s) => winningNumbers.includes(s)).length
       return { user_id: p.id, scores: userScoreList, match_count: matchCount }
     })
 
-    setSimResult({ winning_numbers: winningNumbers, total_pool: totalPool, jackpot_amount: jackpotAmount, entries })
+    const hasJackpotWinner = entries.some(e => e.match_count === 5)
+
+    setSimResult({
+      winning_numbers: winningNumbers,
+      total_pool: totalPool,
+      jackpot_amount: currentJackpot,
+      rolled_over_jackpot: previousJackpot,
+      entries,
+    })
     setLoading(false)
   }
 
@@ -87,6 +113,8 @@ export default function AdminDrawsPage() {
     setMessage('')
 
     const today = new Date().toISOString().split('T')[0]
+    const hasJackpotWinner = simResult.entries.some(e => e.match_count === 5)
+    const jackpotRolledOver = !hasJackpotWinner
 
     const { data: draw, error } = await supabase
       .from('draws')
@@ -97,6 +125,7 @@ export default function AdminDrawsPage() {
         winning_numbers: simResult.winning_numbers,
         total_pool: simResult.total_pool,
         jackpot_amount: simResult.jackpot_amount,
+        jackpot_rolled_over: jackpotRolledOver,
       })
       .select()
       .single()
@@ -107,7 +136,6 @@ export default function AdminDrawsPage() {
       return
     }
 
-    // Insert draw entries and winners
     const entries = simResult.entries.map((e) => ({
       draw_id: draw.id,
       user_id: e.user_id,
@@ -123,7 +151,7 @@ export default function AdminDrawsPage() {
       .map((e) => {
         const matchType = e.match_count === 5 ? '5-match' : e.match_count === 4 ? '4-match' : '3-match'
         const prize = e.match_count === 5
-          ? simResult.total_pool * 0.4
+          ? simResult.jackpot_amount
           : e.match_count === 4
           ? simResult.total_pool * 0.35
           : simResult.total_pool * 0.25
@@ -132,9 +160,22 @@ export default function AdminDrawsPage() {
 
     if (winners.length > 0) await supabase.from('winners').insert(winners)
 
-    setMessage(`✅ Draw published! ${winners.length} winner(s) found.`)
+    const rolloverMsg = jackpotRolledOver
+      ? ` Jackpot of £${simResult.jackpot_amount.toFixed(2)} rolled over to next month!`
+      : ''
+
+    setMessage(`✅ Draw published! ${winners.length} winner(s) found.${rolloverMsg}`)
     setSimResult(null)
+    setPreviousJackpot(jackpotRolledOver ? simResult.jackpot_amount : 0)
     setPublishing(false)
+
+    // Refresh past draws
+    const { data: draws } = await supabase
+      .from('draws')
+      .select('*')
+      .order('draw_date', { ascending: false })
+      .limit(5)
+    if (draws) setPastDraws(draws)
   }
 
   return (
@@ -143,6 +184,19 @@ export default function AdminDrawsPage() {
         <h1 className="text-3xl font-bold text-white">Draw Engine</h1>
         <p className="text-gray-400 mt-1">Configure, simulate and publish the monthly draw</p>
       </div>
+
+      {/* Jackpot rollover notice */}
+      {previousJackpot > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-2xl">⚡</span>
+          <div>
+            <p className="text-yellow-400 font-bold">Jackpot Rolled Over!</p>
+            <p className="text-gray-400 text-sm">
+              £{previousJackpot.toFixed(2)} carried forward from last month's unclaimed jackpot
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Config */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -186,7 +240,6 @@ export default function AdminDrawsPage() {
 
         {simResult && (
           <div className="space-y-6">
-            {/* Winning numbers */}
             <div>
               <p className="text-gray-400 text-sm mb-3">Winning Numbers</p>
               <div className="flex gap-3">
@@ -198,15 +251,20 @@ export default function AdminDrawsPage() {
               </div>
             </div>
 
-            {/* Pool breakdown */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-gray-800 rounded-lg p-4 text-center">
-                <p className="text-gray-400 text-xs">Total Pool</p>
+                <p className="text-gray-400 text-xs">Base Pool</p>
                 <p className="text-white font-bold text-xl mt-1">£{simResult.total_pool.toFixed(2)}</p>
               </div>
+              {simResult.rolled_over_jackpot > 0 && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+                  <p className="text-yellow-400 text-xs">Rolled Over</p>
+                  <p className="text-yellow-400 font-bold text-xl mt-1">+£{simResult.rolled_over_jackpot.toFixed(2)}</p>
+                </div>
+              )}
               <div className="bg-gray-800 rounded-lg p-4 text-center">
-                <p className="text-gray-400 text-xs">Jackpot (40%)</p>
-                <p className="text-green-400 font-bold text-xl mt-1">£{(simResult.total_pool * 0.4).toFixed(2)}</p>
+                <p className="text-gray-400 text-xs">Jackpot (40%{simResult.rolled_over_jackpot > 0 ? ' + rollover' : ''})</p>
+                <p className="text-green-400 font-bold text-xl mt-1">£{simResult.jackpot_amount.toFixed(2)}</p>
               </div>
               <div className="bg-gray-800 rounded-lg p-4 text-center">
                 <p className="text-gray-400 text-xs">Winners Found</p>
@@ -216,7 +274,6 @@ export default function AdminDrawsPage() {
               </div>
             </div>
 
-            {/* Matches */}
             <div>
               <p className="text-gray-400 text-sm mb-3">Match Breakdown</p>
               <div className="space-y-2">
@@ -225,16 +282,20 @@ export default function AdminDrawsPage() {
                   return (
                     <div key={n} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
                       <span className="text-white font-medium">{n}-Number Match</span>
-                      <span className={`font-bold ${count > 0 ? 'text-green-400' : 'text-gray-500'}`}>
-                        {count} winner{count !== 1 ? 's' : ''}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        {n === 5 && !count && (
+                          <span className="text-yellow-400 text-xs">⚡ Jackpot will roll over</span>
+                        )}
+                        <span className={`font-bold ${count > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                          {count} winner{count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
                     </div>
                   )
                 })}
               </div>
             </div>
 
-            {/* Publish button */}
             <button
               onClick={publishDraw}
               disabled={publishing}
@@ -249,6 +310,40 @@ export default function AdminDrawsPage() {
           <p className="text-gray-500 text-center py-8">Run a simulation to preview results before publishing</p>
         )}
       </div>
+
+      {/* Past draws */}
+      {pastDraws.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-bold text-white mb-4">Recent Draws</h2>
+          <div className="space-y-3">
+            {pastDraws.map((draw) => (
+              <div key={draw.id} className="flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-white font-medium">
+                    {new Date(draw.draw_date).toLocaleDateString('en-GB', {
+                      day: 'numeric', month: 'long', year: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-gray-500 text-xs capitalize">{draw.draw_mode} draw</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {draw.jackpot_rolled_over && (
+                    <span className="text-yellow-400 text-xs">⚡ Jackpot rolled</span>
+                  )}
+                  <span className="text-white font-bold">£{Number(draw.total_pool).toFixed(2)}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    draw.status === 'published'
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-gray-700 text-gray-400'
+                  }`}>
+                    {draw.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {message && (
         <div className={`rounded-lg p-4 text-sm font-medium ${

@@ -8,11 +8,16 @@ export default async function AdminUsersPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const { data: allScores } = await supabase
+    .from('scores')
+    .select('*')
+    .order('played_at', { ascending: false })
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-white">Users</h1>
-        <p className="text-gray-400 mt-1">All registered users on the platform</p>
+        <p className="text-gray-400 mt-1">All registered users and their scores</p>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -62,6 +67,36 @@ export default async function AdminUsersPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* User scores section */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 className="text-lg font-bold text-white mb-6">All User Scores</h2>
+        {users && users.map((user) => {
+          const userScores = allScores?.filter(s => s.user_id === user.id) || []
+          if (userScores.length === 0) return null
+          return (
+            <div key={user.id} className="mb-6 last:mb-0">
+              <div className="flex items-center gap-3 mb-3">
+                <p className="text-white font-medium">{user.full_name || user.email}</p>
+                <span className="text-gray-500 text-sm">({userScores.length} scores)</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                {userScores.map((score) => (
+                  <div key={score.id} className="bg-gray-800 rounded-lg px-3 py-2 text-center">
+                    <p className="text-white font-bold text-lg">{score.score}</p>
+                    <p className="text-gray-500 text-xs">
+                      {new Date(score.played_at).toLocaleDateString('en-GB')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {(!allScores || allScores.length === 0) && (
+          <p className="text-gray-500 text-center py-8">No scores entered yet</p>
+        )}
       </div>
     </div>
   )
