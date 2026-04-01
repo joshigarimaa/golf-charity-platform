@@ -22,6 +22,20 @@ export default async function CharityProfilePage({
     .select('id')
     .eq('charity_id', charity.id)
 
+  const { data: events } = await supabase
+    .from('charity_events')
+    .select('*')
+    .eq('charity_id', charity.id)
+    .gte('event_date', new Date().toISOString().split('T')[0])
+    .order('event_date', { ascending: true })
+
+  const { data: contributions } = await supabase
+    .from('charity_contributions')
+    .select('amount')
+    .eq('charity_id', charity.id)
+
+  const totalContributed = contributions?.reduce((sum, c) => sum + Number(c.amount), 0) || 0
+
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <nav className="border-b border-gray-800/50 px-6 py-4">
@@ -39,6 +53,8 @@ export default async function CharityProfilePage({
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-16">
+
+        {/* Header */}
         <div className="mb-12">
           <div className="flex items-start justify-between flex-wrap gap-6">
             <div>
@@ -56,7 +72,8 @@ export default async function CharityProfilePage({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-12">
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
             <p className="text-3xl font-black text-green-400">{supporters?.length || 0}</p>
             <p className="text-gray-400 text-sm mt-1">GolfCharity supporters</p>
@@ -65,12 +82,17 @@ export default async function CharityProfilePage({
             <p className="text-3xl font-black text-blue-400">10%+</p>
             <p className="text-gray-400 text-sm mt-1">Of every subscription</p>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center col-span-2 md:col-span-1">
-            <p className="text-3xl font-black text-purple-400">Monthly</p>
-            <p className="text-gray-400 text-sm mt-1">Contribution cadence</p>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
+            <p className="text-3xl font-black text-purple-400">£{totalContributed.toFixed(2)}</p>
+            <p className="text-gray-400 text-sm mt-1">Total contributed</p>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
+            <p className="text-3xl font-black text-amber-400">{events?.length || 0}</p>
+            <p className="text-gray-400 text-sm mt-1">Upcoming events</p>
           </div>
         </div>
 
+        {/* About */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-4">About {charity.name}</h2>
           <p className="text-gray-400 leading-relaxed text-lg">{charity.description}</p>
@@ -86,6 +108,51 @@ export default async function CharityProfilePage({
           )}
         </div>
 
+        {/* Upcoming events */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
+          <h2 className="text-2xl font-bold mb-6">⛳ Upcoming Golf Events</h2>
+          {events && events.length > 0 ? (
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div key={event.id} className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                  <div className="flex items-start justify-between flex-wrap gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-white font-bold text-lg">{event.title}</h3>
+                      {event.description && (
+                        <p className="text-gray-400 text-sm mt-1 leading-relaxed">{event.description}</p>
+                      )}
+                      {event.location && (
+                        <p className="text-gray-500 text-sm mt-2">
+                          📍 {event.location}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="bg-green-500/20 border border-green-500/30 rounded-xl px-4 py-3 text-center">
+                        <p className="text-green-400 font-black text-2xl">
+                          {new Date(event.event_date).getDate()}
+                        </p>
+                        <p className="text-green-400 text-sm font-medium">
+                          {new Date(event.event_date).toLocaleDateString('en-GB', {
+                            month: 'short', year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-4xl mb-3">📅</p>
+              <p className="text-gray-400">No upcoming events scheduled</p>
+              <p className="text-gray-500 text-sm mt-1">Check back soon for golf days and fundraising events</p>
+            </div>
+          )}
+        </div>
+
+        {/* How contributions work */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">How your contribution works</h2>
           <div className="space-y-4">
@@ -108,9 +175,12 @@ export default async function CharityProfilePage({
           </div>
         </div>
 
+        {/* CTA */}
         <div className="bg-gradient-to-br from-green-500/20 to-blue-500/10 border border-green-500/20 rounded-2xl p-8 text-center">
           <h2 className="text-3xl font-black mb-4">Support {charity.name}</h2>
-          <p className="text-gray-400 mb-8">Subscribe to GolfCharity and choose this charity — play golf, win prizes, and make a difference.</p>
+          <p className="text-gray-400 mb-8">
+            Subscribe to GolfCharity and choose this charity — play golf, win prizes, and make a difference.
+          </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/signup" className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl transition-colors">
               Subscribe & support →
