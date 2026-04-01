@@ -24,7 +24,6 @@ export default async function CharityProfilePage({
 
   return (
     <main className="min-h-screen bg-gray-950 text-white">
-      {/* Navbar */}
       <nav className="border-b border-gray-800/50 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/" className="text-xl font-bold">⛳ GolfCharity</Link>
@@ -40,8 +39,6 @@ export default async function CharityProfilePage({
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-16">
-
-        {/* Header */}
         <div className="mb-12">
           <div className="flex items-start justify-between flex-wrap gap-6">
             <div>
@@ -54,14 +51,11 @@ export default async function CharityProfilePage({
                 )}
               </div>
               <h1 className="text-4xl md:text-5xl font-black mb-4">{charity.name}</h1>
-              <p className="text-gray-400 text-xl leading-relaxed max-w-2xl">
-                {charity.description}
-              </p>
+              <p className="text-gray-400 text-xl leading-relaxed max-w-2xl">{charity.description}</p>
             </div>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-12">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
             <p className="text-3xl font-black text-green-400">{supporters?.length || 0}</p>
@@ -77,14 +71,11 @@ export default async function CharityProfilePage({
           </div>
         </div>
 
-        {/* About */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-4">About {charity.name}</h2>
-          <p className="text-gray-400 leading-relaxed text-lg">
-            {charity.description}
-          </p>
+          <p className="text-gray-400 leading-relaxed text-lg">{charity.description}</p>
           {charity.website_url && (
-            
+            <a
               href={charity.website_url}
               target="_blank"
               rel="noopener noreferrer"
@@ -95,7 +86,6 @@ export default async function CharityProfilePage({
           )}
         </div>
 
-        {/* How contributions work */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">How your contribution works</h2>
           <div className="space-y-4">
@@ -118,12 +108,9 @@ export default async function CharityProfilePage({
           </div>
         </div>
 
-        {/* CTA */}
         <div className="bg-gradient-to-br from-green-500/20 to-blue-500/10 border border-green-500/20 rounded-2xl p-8 text-center">
           <h2 className="text-3xl font-black mb-4">Support {charity.name}</h2>
-          <p className="text-gray-400 mb-8">
-            Subscribe to GolfCharity and choose this charity — play golf, win prizes, and make a difference.
-          </p>
+          <p className="text-gray-400 mb-8">Subscribe to GolfCharity and choose this charity — play golf, win prizes, and make a difference.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/signup" className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl transition-colors">
               Subscribe & support →
@@ -135,7 +122,6 @@ export default async function CharityProfilePage({
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="border-t border-gray-800 py-8 px-6 text-center text-gray-500 text-sm mt-16">
         <p>© 2026 GolfCharity · <Link href="/" className="hover:text-gray-300">Home</Link> · <Link href="/charities" className="hover:text-gray-300">Charities</Link></p>
       </footer>
