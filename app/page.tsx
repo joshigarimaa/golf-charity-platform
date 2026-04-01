@@ -1,6 +1,24 @@
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient()
+  const { data: featuredCharities } = await supabase
+    .from('charities')
+    .select('*')
+    .eq('is_featured', true)
+    .eq('is_active', true)
+    .limit(4)
+
+  const displayCharities = (featuredCharities && featuredCharities.length > 0)
+    ? featuredCharities
+    : [
+        { name: 'Cancer Research UK', description: 'Leading cancer research organisation' },
+        { name: 'British Heart Foundation', description: 'Fighting heart and circulatory diseases' },
+        { name: 'Macmillan Cancer Support', description: 'Support for people living with cancer' },
+        { name: 'Age UK', description: 'Support for older people across the UK' },
+      ]
+
   return (
     <main className="min-h-screen bg-gray-950 text-white">
 
@@ -151,20 +169,39 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
+            <Link href="/signup" className="inline-block mt-8 bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-3 rounded-xl transition-colors">
+              Choose your charity →
+            </Link>
           </div>
+
+          {/* Featured charities from DB */}
           <div className="grid grid-cols-2 gap-4">
-            {[
-              'Cancer Research UK',
-              'British Heart Foundation',
-              'Macmillan Cancer Support',
-              'Age UK',
-            ].map((charity) => (
-              <div key={charity} className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center">
+            {displayCharities.map((charity) => (
+              <div key={charity.name} className="bg-gray-900 border border-gray-800 hover:border-green-500/40 rounded-xl p-5 text-center transition-colors">
                 <span className="text-3xl block mb-2">🤝</span>
-                <p className="text-white text-sm font-medium">{charity}</p>
+                <p className="text-white text-sm font-medium">{charity.name}</p>
+                {charity.description && (
+                  <p className="text-gray-500 text-xs mt-1 line-clamp-2">{charity.description}</p>
+                )}
+                {'is_featured' in charity && charity.is_featured && (
+                  <span className="text-green-400 text-xs mt-2 block">⭐ Featured</span>
+                )}
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Charity directory CTA */}
+      <section className="border-y border-gray-800 py-12">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 className="text-2xl font-black text-white">Explore all our charity partners</h3>
+            <p className="text-gray-400 mt-1">Browse our full directory and find a cause that matters to you</p>
+          </div>
+          <Link href="/charities" className="bg-gray-800 hover:bg-gray-700 text-white font-bold px-6 py-3 rounded-xl transition-colors whitespace-nowrap">
+            View all charities →
+          </Link>
         </div>
       </section>
 
