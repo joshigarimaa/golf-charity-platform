@@ -47,7 +47,11 @@ export default async function CharitiesPage() {
             <h2 className="text-2xl font-bold text-white mb-6">⭐ Featured Charities</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {charities.filter(c => c.is_featured).map((charity) => (
-                <div key={charity.id} className="bg-gray-900 border-2 border-green-500/40 rounded-2xl p-8 relative">
+                <Link
+                  href={`/charities/${charity.id}`}
+                  key={charity.id}
+                  className="bg-gray-900 border-2 border-green-500/40 hover:border-green-500 rounded-2xl p-8 relative block transition-colors"
+                >
                   <span className="absolute top-4 right-4 bg-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full border border-green-500/30">
                     ⭐ Featured
                   </span>
@@ -56,20 +60,15 @@ export default async function CharitiesPage() {
                   <p className="text-gray-400 text-sm leading-relaxed mb-4">{charity.description}</p>
                   <div className="flex items-center gap-4">
                     {charity.website_url && (
-                      <a
-                        href={charity.website_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-400 hover:text-green-300 text-sm transition-colors"
-                      >
+                      <span className="text-green-400 text-sm">
                         Visit website →
-                      </a>
+                      </span>
                     )}
-                    <Link href="/signup" className="bg-green-500 hover:bg-green-400 text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors">
-                      Support this charity
-                    </Link>
+                    <span className="bg-green-500 text-black font-bold px-4 py-2 rounded-lg text-sm">
+                      View profile →
+                    </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -80,26 +79,21 @@ export default async function CharitiesPage() {
           <h2 className="text-2xl font-bold text-white mb-6">All Charities</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {charities && charities.map((charity) => (
-              <div key={charity.id} className="bg-gray-900 border border-gray-800 hover:border-green-500/40 rounded-xl p-6 transition-colors">
+              <Link
+                href={`/charities/${charity.id}`}
+                key={charity.id}
+                className="bg-gray-900 border border-gray-800 hover:border-green-500/40 rounded-xl p-6 transition-colors block"
+              >
                 <span className="text-3xl block mb-3">🤝</span>
                 <h3 className="text-white font-bold text-lg mb-2">{charity.name}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed mb-4 line-clamp-3">{charity.description}</p>
                 <div className="flex items-center justify-between">
-                  {charity.website_url ? (
-                    <a
-                      href={charity.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-green-400 hover:text-green-300 text-xs transition-colors"
-                    >
-                      Visit website →
-                    </a>
-                  ) : <span />}
+                  <span className="text-green-400 text-xs">View profile →</span>
                   {charity.is_featured && (
                     <span className="text-green-400 text-xs">⭐ Featured</span>
                   )}
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

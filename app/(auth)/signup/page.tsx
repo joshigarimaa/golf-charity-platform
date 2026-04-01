@@ -34,6 +34,21 @@ export default function SignupPage() {
       return
     }
 
+    // Send welcome email
+    try {
+      await fetch('/api/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'welcome',
+          to: email,
+          data: { name: fullName }
+        })
+      })
+    } catch {
+      // Email failure shouldn't block signup
+    }
+
     router.push('/dashboard')
   }
 

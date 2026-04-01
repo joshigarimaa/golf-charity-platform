@@ -24,7 +24,6 @@ export default function AdminDrawsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Get past draws
       const { data: draws } = await supabase
         .from('draws')
         .select('*')
@@ -33,7 +32,6 @@ export default function AdminDrawsPage() {
 
       if (draws) setPastDraws(draws)
 
-      // Check for rolled over jackpot from last draw
       const lastDraw = draws?.[0]
       if (lastDraw?.jackpot_rolled_over) {
         setPreviousJackpot(Number(lastDraw.jackpot_amount))
@@ -95,8 +93,6 @@ export default function AdminDrawsPage() {
       return { user_id: p.id, scores: userScoreList, match_count: matchCount }
     })
 
-    const hasJackpotWinner = entries.some(e => e.match_count === 5)
-
     setSimResult({
       winning_numbers: winningNumbers,
       total_pool: totalPool,
@@ -146,30 +142,92 @@ export default function AdminDrawsPage() {
 
     await supabase.from('draw_entries').insert(entries)
 
-    const winners = simResult.entries
-      .filter((e) => e.match_count >= 3)
-      .map((e) => {
-        const matchType = e.match_count === 5 ? '5-match' : e.match_count === 4 ? '4-match' : '3-match'
-        const prize = e.match_count === 5
-          ? simResult.jackpot_amount
-          : e.match_count === 4
-          ? simResult.total_pool * 0.35
-          : simResult.total_pool * 0.25
-        return { draw_id: draw.id, user_id: e.user_id, match_type: matchType, prize_amount: prize }
-      })
+    const winnerEntries = simResult.entries.filter((e) => e.match_count >= 3)
+
+    const winners = winnerEntries.map((e) => {
+      const matchType = e.match_count === 5 ? '5-match' : e.match_count === 4 ? '4-match' : '3-match'
+      const prize = e.match_count === 5
+        ? simResult.jackpot_amount
+        : e.match_count === 4
+        ? simResult.total_pool * 0.35
+        : simResult.total_pool * 0.25
+      return { draw_id: draw.id, user_id: e.user_id, match_type: matchType, prize_amount: prize }
+    })
 
     if (winners.length > 0) await supabase.from('winners').insert(winners)
+
+    // Send winner emails
+    for (const winner of winnerEntries) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', winner.user_id)
+        .single()
+
+      if (profile?.email) {
+        const matchType = winner.match_count === 5 ? '5-match' : winner.match_count === 4 ? '4-match' : '3-match'
+        const prize = winner.match_count === 5
+          ? simResult.jackpot_amount
+          : winner.match_count === 4
+          ? simResult.total_pool * 0.35
+          : simResult.total_pool * 0.25
+
+        try {
+          await fetch('/api/resend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'winner_alert',
+              to: profile.email,
+              data: {
+                name: profile.full_name || 'Golfer',
+                match_type: matchType,
+                prize_amount: prize.toFixed(2)
+              }
+            })
+          })
+        } catch {
+          // Email failure shouldn't block draw publishing
+        }
+      }
+    }
+
+    // Send draw results to all subscribers
+    const { data: allSubscribers } = await supabase
+      .from('profiles')
+      .select('email, full_name, id')
+      .eq('subscription_status', 'active')
+
+    for (const subscriber of (allSubscribers || [])) {
+      const entry = simResult.entries.find(e => e.user_id === subscriber.id)
+      try {
+        await fetch('/api/resend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'draw_results',
+            to: subscriber.email,
+            data: {
+              name: subscriber.full_name || 'Golfer',
+              winning_numbers: simResult.winning_numbers,
+              match_count: entry?.match_count || 0
+            }
+          })
+        })
+      } catch {
+        // Continue even if email fails
+      }
+    }
 
     const rolloverMsg = jackpotRolledOver
       ? ` Jackpot of £${simResult.jackpot_amount.toFixed(2)} rolled over to next month!`
       : ''
 
-    setMessage(`✅ Draw published! ${winners.length} winner(s) found.${rolloverMsg}`)
+    setMessage(`✅ Draw published! ${winners.length} winner(s) found. Emails sent to all subscribers.${rolloverMsg}`)
     setSimResult(null)
     setPreviousJackpot(jackpotRolledOver ? simResult.jackpot_amount : 0)
     setPublishing(false)
 
-    // Refresh past draws
     const { data: draws } = await supabase
       .from('draws')
       .select('*')
@@ -185,7 +243,6 @@ export default function AdminDrawsPage() {
         <p className="text-gray-400 mt-1">Configure, simulate and publish the monthly draw</p>
       </div>
 
-      {/* Jackpot rollover notice */}
       {previousJackpot > 0 && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center gap-3">
           <span className="text-2xl">⚡</span>
@@ -198,7 +255,6 @@ export default function AdminDrawsPage() {
         </div>
       )}
 
-      {/* Config */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <h2 className="text-lg font-bold text-white mb-4">Draw Configuration</h2>
         <div className="flex gap-4">
@@ -225,7 +281,6 @@ export default function AdminDrawsPage() {
         </div>
       </div>
 
-      {/* Simulate */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-white">Simulation</h2>
@@ -301,7 +356,7 @@ export default function AdminDrawsPage() {
               disabled={publishing}
               className="w-full bg-green-500 hover:bg-green-400 disabled:bg-green-500/50 text-black font-bold py-4 rounded-lg transition-colors text-lg"
             >
-              {publishing ? 'Publishing...' : '🚀 Publish Draw Results'}
+              {publishing ? 'Publishing & sending emails...' : '🚀 Publish Draw Results'}
             </button>
           </div>
         )}
@@ -311,7 +366,6 @@ export default function AdminDrawsPage() {
         )}
       </div>
 
-      {/* Past draws */}
       {pastDraws.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-bold text-white mb-4">Recent Draws</h2>
